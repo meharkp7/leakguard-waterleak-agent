@@ -233,7 +233,9 @@ async def agent_endpoint(payload: dict):
         # First call: let Gemini decide the tool
         response = gemini_model.generate_content(
             [user_query],
-            tool_config=ToolConfig(),
+            tool_config=ToolConfig(
+                function_calling_config=FunctionCallingConfig(mode="AUTO")
+            ),
         )
 
         candidate = response.candidates[0]
