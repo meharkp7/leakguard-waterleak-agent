@@ -1,5 +1,6 @@
 import os
 import joblib
+import pandas as pd
 from fastapi import FastAPI
 from app.schemas import Reading, PredictionOut
 
@@ -24,22 +25,23 @@ def root():
 
 @app.post("/predict", response_model=PredictionOut)
 def predict(reading: Reading):
-    data = [[
-        reading.Pressure,
-        reading.Flow_Rate,
-        reading.Temperature,
-        reading.Vibration,
-        reading.RPM,
-        reading.Operational_Hours,
-        reading.Latitude,
-        reading.Longitude,
-        reading.Zone,
-        reading.Block,
-        reading.Pipe,
-        reading.Location_Code,
-    ]]
 
-    proba = model.predict_proba(data)[0][1]
+    input_df = pd.DataFrame([{
+        "Pressure": reading.Pressure,
+        "Flow_Rate": reading.Flow_Rate,
+        "Temperature": reading.Temperature,
+        "Vibration": reading.Vibration,
+        "RPM": reading.RPM,
+        "Operational_Hours": reading.Operational_Hours,
+        "Latitude": reading.Latitude,
+        "Longitude": reading.Longitude,
+        "Zone": reading.Zone,
+        "Block": reading.Block,
+        "Pipe": reading.Pipe,
+        "Location_Code": reading.Location_Code
+    }])
+
+    proba = model.predict_proba(input_df)[0][1]
     label = int(proba >= 0.5)
     return PredictionOut(
         leakage_flag=label,
