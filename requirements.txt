@@ -7,3 +7,5 @@ lightgbm==4.6.0
 pydantic
 pandas
 google-cloud-bigquery
+google-cloud-aiplatform
+requests
