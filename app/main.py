@@ -16,6 +16,7 @@ from vertexai.generative_models import (
     FunctionDeclaration,
     Tool,
     ToolConfig,
+    FunctionCallingConfig,
 )
 
 # -------------------------------------------------------------------
