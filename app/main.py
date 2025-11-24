@@ -85,16 +85,50 @@ def predict(reading: Reading):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ========== AGENT ENDPOINT ==========
+from vertexai.generative_models import GenerativeModel, Tool
+import requests
+
+def predict_tool(parameters: dict):
+    try:
+        r = requests.post(
+            os.getenv("PREDICT_URL"),
+            json=parameters,
+            timeout=10
+        )
+        return r.json()
+    except Exception as e:
+        return {"error": str(e)}
+
+tools = [
+    Tool(
+        function=predict_tool,
+        name="predict_leak",
+        description="Predicts leakage using pressure, temperature, flow rate etc."
+    )
+]
+
+gemini_model = GenerativeModel(
+    model_name="gemini-2.0-flash-001",
+    tools=tools
+)
+
+SYSTEM_PROMPT = """
+You are LeakGuard AI Agent. Your role: detect water leakage risk.
+
+If user gives device inputs (pressure, flow, temperature, vibration, rpm,
+op hours, latitude, longitude, zone, block, pipe, location_code):
+- Identify missing values
+- Call the predict_leak tool with correct keys
+- DO NOT explain pipeline theory unless asked
+"""
+
 @app.post("/agent")
 async def agent_endpoint(payload: dict):
+    user_query = payload.get("query", "")
     try:
-        user_query = payload.get("query", "")
-        if not user_query:
-            return {"error": "query missing"}
-
-        response = gemini_model.generate_content([user_query])
+        response = gemini_model.generate_content(
+            [SYSTEM_PROMPT, user_query]
+        )
         return {"response": response.text}
-
     except Exception as e:
         return {"error": str(e)}
