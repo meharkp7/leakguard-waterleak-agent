@@ -108,3 +108,12 @@ async def agent_endpoint(payload: dict):
         return {"response": response.text}
     except Exception as e:
         return {"error": str(e)}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=int(os.getenv("PORT", 8080)),
+        workers=1
+    )
