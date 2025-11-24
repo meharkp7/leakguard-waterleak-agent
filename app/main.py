@@ -222,9 +222,6 @@ def tool_summarize_recent_leakage(args: dict) -> dict:
 # -------------------------------------------------------------------
 # Agent endpoint
 # -------------------------------------------------------------------
-class AgentRequest(pd.io.json._json.loads.__class__):
-    ...
-
 
 @app.post("/agent")
 async def agent_endpoint(payload: dict):
