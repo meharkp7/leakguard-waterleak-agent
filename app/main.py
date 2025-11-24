@@ -225,65 +225,67 @@ def tool_summarize_recent_leakage(args: dict) -> dict:
 
 @app.post("/agent")
 async def agent_endpoint(payload: dict):
-    """
-    Body: { "query": "..." }
+    try:
+        user_query = payload.get("query", "")
+        if not user_query:
+            return {"answer": "Please provide a 'query' in request body."}
 
-    Example queries:
-    - "What are the top risky zones in last 24 hours?"
-    - "Given this reading, is there a leak? { ... }"
-    """
-    user_query = payload.get("query", "")
-    if not user_query:
-        return {"answer": "Please provide a 'query' field in the JSON body."}
+        # First call: let Gemini decide the tool
+        response = gemini_model.generate_content(
+            [user_query],
+            tool_config=ToolConfig(function_call="AUTO"),
+        )
 
-    # First call: let Gemini decide if it wants to call tools
-    response = gemini_model.generate_content(
-        [user_query],
-        tool_config=ToolConfig(function_call="AUTO"),
-    )
+        candidate = response.candidates[0]
+        tool_call = None
+        natural_text = ""
 
-    candidate = response.candidates[0]
-    answer_text_parts = []
-    tool_call = None
-
-    for part in candidate.content.parts:
-        if hasattr(part, "function_call") and part.function_call:
-            tool_call = part.function_call
-        else:
+        for part in candidate.content.parts:
+            if getattr(part, "function_call", None):
+                tool_call = part.function_call
             if getattr(part, "text", None):
-                answer_text_parts.append(part.text)
+                natural_text += part.text
 
-    # If no tool call, just return the model's text answer
-    if not tool_call:
+        # If no tool needed → respond directly
+        if not tool_call:
+            return {
+                "answer": natural_text.strip(),
+                "used_tool": None
+            }
+
+        fn_name = tool_call.name
+        fn_args = json.loads(tool_call.args) if isinstance(tool_call.args, str) else dict(tool_call.args)
+
+        # Execute tool
+        if fn_name == "predict_leak_risk":
+            tool_result = tool_predict_leak_risk(fn_args)
+
+        elif fn_name == "summarize_recent_leakage":
+            # Graceful fallback if no logs yet
+            result = tool_summarize_recent_leakage(fn_args)
+            if not result["top_zones"]:
+                return {
+                    "answer": "No leakage data logged yet — system healthy 👍",
+                    "used_tool": fn_name,
+                    "tool_result": result,
+                }
+            tool_result = result
+
+        else:
+            tool_result = {"error": f"Unknown tool: {fn_name}"}
+
+        # Second pass: Gemini explains tool result
+        final = gemini_model.generate_content([
+            f"User asked: {user_query}",
+            f"Tool {fn_name} returned: {json.dumps(tool_result)}",
+            "Explain clearly + provide actionable suggestions."
+        ])
+
         return {
-            "answer": " ".join(answer_text_parts).strip(),
-            "used_tool": None,
+            "answer": final.text.strip(),
+            "used_tool": fn_name,
+            "tool_result": tool_result,
         }
 
-    # Execute tool call
-    fn_name = tool_call.name
-    fn_args = json.loads(tool_call.args) if isinstance(tool_call.args, str) else dict(tool_call.args)
-
-    if fn_name == "predict_leak_risk":
-        tool_result = tool_predict_leak_risk(fn_args)
-    elif fn_name == "summarize_recent_leakage":
-        tool_result = tool_summarize_recent_leakage(fn_args)
-    else:
-        tool_result = {"error": f"Unknown tool: {fn_name}"}
-
-    # Second call: ask Gemini to explain the tool result to the user
-    followup = gemini_model.generate_content(
-        [
-            user_query,
-            f"Tool {fn_name} returned this JSON: {json.dumps(tool_result)}. "
-            "Explain this clearly to a non-technical operator, and give a short action plan.",
-        ]
-    )
-
-    final_text = followup.text
-
-    return {
-        "answer": final_text,
-        "used_tool": fn_name,
-        "tool_result": tool_result,
-    }
+    except Exception as e:
+        return {"error": str(e)}
