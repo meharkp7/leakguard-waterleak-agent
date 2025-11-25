@@ -69,3 +69,9 @@ cd leakguard-waterleak-agent
 pip install -r requirements.txt
 streamlit run app.py
 
+## ✨ Future Enhancements
+Auto shut-off valve integration
+Deep anomaly pattern learning
+Mobile application
+Predictive maintenance scheduling
+Voice alerts + SMS notifications
