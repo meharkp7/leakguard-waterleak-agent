@@ -1,22 +1,18 @@
 import os
 import json
 from datetime import datetime
-
 import joblib
 import pandas as pd
 import requests
 from fastapi import FastAPI, Request
 from google.cloud import bigquery
-
 from app.schemas import Reading, PredictionOut
-
 import vertexai
 from vertexai.generative_models import (
     GenerativeModel,
     FunctionDeclaration,
     Tool,
     ToolConfig,
-    FunctionCallingConfig,
 )
 
 # -------------------------------------------------------------------
@@ -27,7 +23,7 @@ PROJECT_ID = os.getenv("GCP_PROJECT", "weighty-stacker-472817-j1")
 VERTEX_REGION = os.getenv("VERTEX_REGION", "us-central1")
 PREDICT_URL = os.getenv(
     "PREDICT_URL",
-    "https://leakguard-api-217279920936.asia-south1.run.app/predict",
+    "https://leakguard-api-217279920936.asia-south1.run.app",
 )
 
 # -------------------------------------------------------------------
@@ -38,7 +34,7 @@ model = joblib.load(MODEL_PATH)
 # -------------------------------------------------------------------
 # BigQuery client + table for logging
 # -------------------------------------------------------------------
-bq_client = bigquery.Client()
+bq_client = bigquery.Client(project=PROJECT_ID)
 BQ_TABLE_ID = f"{PROJECT_ID}.leakguard_db.predictions"
 
 # -------------------------------------------------------------------
@@ -111,7 +107,7 @@ tools = [
 ]
 
 gemini_model = GenerativeModel(
-    "gemini-1.5-flash",
+    model_name="gemini-2.0-flash-001",
     tools=tools,
 )
 
@@ -182,11 +178,18 @@ def predict(request: Request, reading: Reading):
 # Tool execution helpers for the Agent
 # -------------------------------------------------------------------
 def tool_predict_leak_risk(args: dict) -> dict:
-    """Call our own Cloud Run /predict endpoint."""
-    resp = requests.post(PREDICT_URL, json=args, timeout=10)
-    resp.raise_for_status()
-    return resp.json()
-
+    try:
+        df = pd.DataFrame([args])
+        proba = model.predict_proba(df)[0][1]
+        label = int(proba >= 0.5)
+        risk = risk_from_prob(proba)
+        return {
+            "leakage_flag": label,
+            "leakage_prob": float(proba),
+            "risk_level": risk
+        }
+    except Exception as e:
+        return {"error": str(e)}
 
 def tool_summarize_recent_leakage(args: dict) -> dict:
     """Run a BigQuery aggregation over recent predictions."""
@@ -232,12 +235,8 @@ async def agent_endpoint(payload: dict):
             return {"answer": "Please provide a 'query' in request body."}
 
         # First call: let Gemini decide the tool
-        response = gemini_model.generate_content(
-            [user_query],
-            tool_config=ToolConfig(
-                function_calling_config=FunctionCallingConfig(mode="AUTO")
-            ),
-        )
+        response = gemini_model.generate_content([user_query])
+
 
         candidate = response.candidates[0]
         tool_call = None
