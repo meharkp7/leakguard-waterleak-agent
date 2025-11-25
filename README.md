@@ -2,7 +2,7 @@
 
 ![Status](https://img.shields.io/badge/Status-Active-brightgreen)
 ![UI](https://img.shields.io/badge/Streamlit-UI-red)
-![Agent](https://img.shields.io/badge/Vortex%20AI-Enabled-purple)
+![Agent](https://img.shields.io/badge/Vertex%20AI-Enabled-purple)
 ![Cloud](https://img.shields.io/badge/Google%20Cloud-Backend-blue)
 ![Model](https://img.shields.io/badge/ML%20Model-Leak%20Classifier-orange)
 ![Maintained](https://img.shields.io/badge/Maintained-Yes-green)
@@ -68,3 +68,4 @@ git clone https://github.com/meharkp7/leakguard-waterleak-agent
 cd leakguard-waterleak-agent
 pip install -r requirements.txt
 streamlit run app.py
+
